@@ -2,9 +2,13 @@
 import uproot
 import pandas
 import awkward as ak
-import matplotlib
+import numpy as np
+import matplotlib as mpl
 #matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
 import matplotlib.pyplot as plt
+
+
+# ---------- DATA FRAMES ----------- #
 
 # Open root file and its trees
 file = uproot.open('/data/jchishol/mntuple_ttbar_6_parton_ejets.root')
@@ -27,63 +31,66 @@ df.drop(indexNames,inplace=True)
 # Calculate the resolution
 df['resolution'] = df['truth pt']/df['reco pt']-1
 
-# Cut rows where likelihood <= -50 (currently saved as a copy and not the original df)
-cut = df[df['likelihood']>-50]
+# Cut rows where likelihood <= some number (currently saved as a copy and not the original df)
+cutA = df[df['likelihood']>-52]
+cutB = df[df['likelihood']>-50]
+cutC = df[df['likelihood']>-48]
 
-# Printing for testing
-# print df
-# print cut
+# ------------- PLOTTING -------------- #
 
-# Create 2D plot of truth vs reco pt
-plt.figure('2D')
-plt.hist2d(df['reco pt'],df['truth pt'],bins=10,cmap=plt.cm.Blues)
-plt.xlabel('Reco p$_T^{t,had}$ [GeV]')
-plt.ylabel('Truth p$_T^{t,had}$ [GeV]')
+# Choose ticks/binning (may be better choices, this was just in the paper)
+ticks = [0,50,100,160,225,300,360,475,1000]
+ticks_labels = ['0','50','100','160','225','300','360','475','1000']
+n = len(ticks)
+ran = ticks[::n-1]
+
+# Create 2D array of truth vs reco pt (which can be plotted also)
+#fig,ax = plt.subplots()
+#ax.set_xticks(ticks)
+#ax.set_yticks(ticks)
+H, xedges, yedges = np.histogram2d(df['reco pt'],df['truth pt'],bins=ticks,range=[ran,ran])
+#plt.pcolormesh(xedges,yedges,cmap=plt.cm.Blues)
+#plt.xlabel('Reco p$_T^{t,had}$ [GeV]')
+#plt.ylabel('Truth p$_T^{t,had}$ [GeV]')
+#plt.colorbar()
+
+# Normalize the rows out of 100 and round to integers
+norm = (np.rint((H.T/np.sum(H,axis=1))*100)).T.astype(int)
+
+# Plot truth vs reco pt with normalized rows
+plt.figure('Normalized 2D Plot')
+masked_norm = np.ma.masked_where(norm==0,norm)  # Needed to make the zero bins whitee
+plt.imshow(masked_norm,extent=[0,8,0,8],cmap=plt.cm.Blues,origin='lower')
+plt.xticks(np.arange(n),ticks_labels,fontsize=9,rotation=-25)
+plt.yticks(np.arange(n),ticks_labels,fontsize=9)
+plt.xlabel('Reco p$_T^{t,had}$ [GeV]',fontsize=12)
+plt.ylabel('Truth p$_T^{t,had}$ [GeV]',fontsize=12)
+plt.clim(0,100)
 plt.colorbar()
+
+# Label the content of each bin
+for i in range (8):
+       for j in range(8):
+		if masked_norm.T[i,j] != 0:   # Don't label empty bins
+                	plt.text(i+0.5,j+0.5,masked_norm.T[i,j],color="k",fontsize=6,weight="bold",ha="center",va="center")
+plt.savefig('plots/Normalized_2D_thad_pt')
+
 
 # Create plot of resolution with and without likelihood cut
 plt.figure('Resolution')
 plt.hist(df['resolution'],bins=100,range=(-1,1),histtype='step')
-plt.hist(cut['resolution'],bins=100,range=(-1,1),histtype='step')
+plt.hist(cutA['resolution'],bins=100,range=(-1,1),histtype='step')
+plt.hist(cutB['resolution'],bins=100,range=(-1,1),histtype='step')
+plt.hist(cutC['resolution'],bins=100,range=(-1,1),histtype='step')
 plt.xlabel('p$_T^{t,had}$ Resolution')
 plt.ylabel('Counts')
-plt.legend(['No Cuts','logLikelihood > -50'])
+plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
+plt.savefig('plots/Resolution_thad_pt')
+
+# Show plots
 plt.show()
 
 
-
-# SCRAP WORK
-
-#plt.subplot(1,3,1)
-#plt.hist(branches1['MC_thad_afterFSR_pt'],bins=10)
-#plt.subplot(1,3,2)
-#plt.hist(branches2['klfitter_bestPerm_topHad_pt'],bins=10)
-#plt.subplot(1,3,3)
-#plt.hist([branches1['MC_thad_afterFSR_pt'],branches2['klfitter_bestPerm_topHad_pt']],bins=10)
-
-#plt.figure()
-#(n, bins, patches) = plt.hist(branches1['MC_thad_afterFSR_pt'],bins=10)
-#print n
-
-#plt.figure()
-#plt.hist2d(x,y,bins=8,range=[[0,400],[0,400]],cmap=plt.cm.Blues)
-
-#ticks = [0,50,100,160,225,300,360,475,1000]
-#(fig, ax) = plt.subplots()
-#ax.set_aspect("equal")
-#(hist, xbins, ybins, im) = plt.hist2d(x,y,bins=8,cmap=plt.cm.Blues) # returns 2D array of values (I think?), x bin edges, y bin edges, and image
-#print hist
-#plt.xticks(x,ticks)
-#plt.yticks(y,ticks)
-#plt.xlabel('klfitter_bestPerm_topHad_pt')
-#plt.ylabel('PseudoTop_Reco_top_had_pt')
-#plt.colorbar()
-#for i in range (len(xbins)-1):
-#	for j in range(len(ybins)-1):
-		#ax.text(xbins[i]+25,ybins[j]+25,round(hist.T[i,j]/60000,2),color="k",ha="center",va="center") # x position, y position, string of text, etc
-#		ax.text(xbins[i]+25,ybins[j]+25,i,color="k",ha="center",va="center")
-#plt.show()
-#plt.savefig('/home/jchishol/Summer_Project/test_plot.png')
 
 
 print("done :)")
