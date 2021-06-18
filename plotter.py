@@ -17,21 +17,55 @@ reco = 'klfitter_bestPerm_topHad_'
 
 # ---------- IMPORTING DATA ---------- #
 
-# Open root file and its trees
-file = uproot.open('/data/jchishol/mntuple_ttbar_6_parton_ejets.root')
-tree_truth = file['parton'].arrays()
-tree_reco = file['reco'].arrays()
+# Open first root file and its trees
+file0 = uproot.open('/data/jchishol/mntuple_ttbar_0_parton_ejets.root')
+tree_truth0 = file0['parton'].arrays()
+tree_reco0 = file0['reco'].arrays()
 
 # Create pandas dataframe
-df = ak.to_pandas(tree_reco['isMatched'])                               # Add reco isMatched to df
+df = ak.to_pandas(tree_reco0['isMatched'])                              # Add reco isMatched to df
 df.rename(columns={'values':'reco isMatched'},inplace=True)             # Rename first column appropriately
 #df['truth isMatched'] = ak.to_pandas(tree_truth['isMatched'])          # Add truth isMatched (might not really need this one)
-df['likelihood'] = ak.to_pandas(tree_reco['klfitter_logLikelihood'])    # Add logLikelihood of klfitter
+df['likelihood'] = ak.to_pandas(tree_reco0['klfitter_logLikelihood'])   # Add logLikelihood of klfitter
 
 # Add variables to be plotted
 for i in range(len(var)):
-	df['reco '+var[i]] = ak.to_pandas(tree_reco[reco+var[i]])
-	df['truth '+var[i]] = ak.to_pandas(tree_truth[truth+var[i]])
+	df['reco '+var[i]] = ak.to_pandas(tree_reco0[reco+var[i]])
+	df['truth '+var[i]] = ak.to_pandas(tree_truth0[truth+var[i]])
+
+# Close root file
+file0.close()
+
+# Make a function that will append data to the frame
+# Input: Data frame and file number (in string form)
+def Append_Data(df,n):
+	
+	# Open root file and its trees
+	filen = uproot.open('/data/jchishol/mntuple_ttbar_'+n+'_parton_ejets.root')
+	tree_truth_n = filen['parton'].arrays()
+	tree_reco_n = filen['reco'].arrays()
+
+	# Create pandas data frame
+	df_addon = ak.to_pandas(tree_reco_n['isMatched'])
+	df_addon.rename(columns={'values':'reco isMatched'},inplace=True)
+	df_addon['likelihood'] = ak.to_pandas(tree_reco_n['klfitter_logLikelihood'])
+
+	# Add variables to be plotted
+	for i in range(len(var)):
+		df_addon['reco '+var[i]] = ak.to_pandas(tree_reco_n[reco+var[i]])
+		df_addon['truth '+var[i]] = ak.to_pandas(tree_truth_n[truth+var[i]])
+
+	# Append data to the main data frame
+	df = df.append(df_addon,ignore_index=True)
+
+	# Close root file
+	filen.close()
+
+	return df
+
+# Append data from each data file to the main data frame
+for n in range(1,8):
+	df = Append_Data(df,str(n))
 
 # Cut rows that are not matched between truth and reco
 indexNames = df[df['reco isMatched'] == 0 ].index
@@ -96,7 +130,6 @@ def plot_2D(i,ticks):
 			if masked_norm.T[j,k] != 0:   # Don't label empty bins
 	                	plt.text(j+0.5,k+0.5,masked_norm.T[j,k],color="k",fontsize=6,weight="bold",ha="center",va="center")
 	plt.savefig('plots/Normalized_2D_thad_'+var[i],bbox_inches='tight')
-	#plt.show()
 
 # Plot pt
 #ticks = [0,50,100,160,225,300,360,475,1000]   # Choose ticks/binning (may be better choices, this was just in the paper)
@@ -133,7 +166,7 @@ plot_2D(6,ticks_pout)
 
 # Create plots of resolution with and without likelihood cut
 for i in range(len(var)):
-	plt.figure(labels[i]+' Resolution')
+	plt.figure(var[i]+' Resolution')
 	plt.hist(df['resolution '+var[i]],bins=100,range=(-1,1),histtype='step')
 	plt.hist(cutA['resolution '+var[i]],bins=100,range=(-1,1),histtype='step')
 	plt.hist(cutB['resolution '+var[i]],bins=100,range=(-1,1),histtype='step')
