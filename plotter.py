@@ -91,8 +91,6 @@ def Edit_Data(df):
 	df['truth E'] = df['truth E']/1000
 	df['truth pout'] = df['truth pout']/1000
 
-	df['truth eta'] =df['truth eta']/1000000000    # No idea what's going on here
-
 	# Calculate the resolution
 	for i in range(len(var)):
         	df['resolution '+var[i]] = df['truth '+var[i]]/df['reco '+var[i]]-1
@@ -157,7 +155,7 @@ def Create_2D_Plots(cutB, name):
 	Plot_2D(cutB,0,ticks_pt,name)
 
 	# eta
-	ticks_eta = np.arange(-2,2.5,0.5)
+	ticks_eta = np.arange(-3,3.5,0.5)
 	Plot_2D(cutB,1,ticks_eta,name)
 	
 	# y
