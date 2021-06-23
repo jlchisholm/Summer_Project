@@ -5,7 +5,8 @@ import awkward as ak
 import numpy as np
 import matplotlib
 #matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
+from matplotlib import colors
 
 # List some useful strings
 var = ['pt','eta','y','phi','m','E','pout']
@@ -30,7 +31,7 @@ def Create_DF(name):
 	# Create pandas dataframe
 	df = ak.to_pandas(tree_reco0['isMatched'])                              # Add reco isMatched to df
 	df.rename(columns={'values':'reco isMatched'},inplace=True)             # Rename first column appropriately
-	#df['truth isMatched'] = ak.to_pandas(tree_truth['isMatched'])          # Add truth isMatched (might not really need this one)
+	#df['truth isMatched'] = ak.to_pandas(tree_truth0['isMatched'])          # Add truth isMatched (might not really need this one)
 	df['likelihood'] = ak.to_pandas(tree_reco0['klfitter_logLikelihood'])   # Add logLikelihood of klfitter
 
 	# Add variables to be plotted
@@ -80,7 +81,7 @@ def Append_Data(df,n,name):
 # Input: data frame
 # Output: data frame
 def Edit_Data(df):
-	
+
 	# Cut rows that are not matched between truth and reco
 	indexNames = df[df['reco isMatched'] == 0 ].index
 	df.drop(indexNames,inplace=True)
@@ -92,8 +93,9 @@ def Edit_Data(df):
 	df['truth pout'] = df['truth pout']/1000
 
 	# Calculate the resolution
-	for i in range(len(var)):
-        	df['resolution '+var[i]] = df['truth '+var[i]]/df['reco '+var[i]]-1
+	#for i in range(len(var)):
+        #	df['resolution '+var[i]] = df['truth '+var[i]]/df['reco '+var[i]]-1
+	df['resolution pout'] = (df['truth pout']/df['reco pout'])-1
 
 	return df
 
@@ -101,25 +103,24 @@ def Edit_Data(df):
 # Creates and saves the 2D histogram normalized by rows
 # Input: cutB of df, variable index, chosen bins/ticks, and data type
 # Output: saves histogram as png
-def Plot_2D(cutB,i,ticks,name):
+def Plot_2D(cutB,i,ticks,ticks_labels,name):
 
 	# Define useful constants
-        ticks_labels = map(str,ticks)
         n = len(ticks)
         ran = ticks[::n-1]
 
         # Create 2D array of truth vs reco variable (which can be plotted also)
-        #fig,ax = plt.subplots()
+        #plt.figure('2D')
+	#fig,ax = plt.subplots()
         #ax.set_xticks(ticks)
         #ax.set_yticks(ticks)
-        H, xedges, yedges = np.histogram2d(cutB['reco '+var[i]],cutB['truth '+var[i]],bins=ticks,range=[ran,ran])
+        H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+var[i]],ticks[0],ticks[-1]),np.clip(cutB['truth '+var[i]],ticks[0],ticks[-1]),bins=ticks,range=[ran,ran])
         #plt.pcolormesh(xedges,yedges,cmap=plt.cm.Blues)
         #plt.xlabel('Reco '+labels[i]+units[i])
         #plt.ylabel('Truth '+labels[i]+units[i])
-        #plt.colorbar()
 
-        # Normalize the rows out of 100 and round to integers
-        norm = (np.rint((H.T/np.sum(H,axis=1))*100)).T.astype(int)
+	# Normalize the rows out of 100 and round to integers
+	norm = (np.rint((H/np.sum(H.T,axis=1))*100)).T.astype(int)
 
         # Plot truth vs reco pt with normalized rows
         plt.figure(name+' '+var[i]+' Normalized 2D Plot')
@@ -140,9 +141,8 @@ def Plot_2D(cutB,i,ticks,name):
         
 	# Save the figure as a png
 	plt.savefig('plots/Normalized_2D_'+name+'_thad_'+var[i],bbox_inches='tight')
-
 	print 'Saved Figure: Normalized_2D_'+name+'_thad_'+var[i]
-
+	
 
 # Defines bins/ticks and implements Plot_2D for each variable
 # Input: cutB of df, and data type
@@ -151,32 +151,51 @@ def Create_2D_Plots(cutB, name):
 	# pt
 	#ticks = [0,50,100,160,225,300,360,475,1000]   # Choose ticks/binning (may be better choices, this was just in the paper)
 	#ticks_labels = ['0','50','100','160','225','300','360','475','1000']
-	ticks_pt = range(0,450,50)
-	Plot_2D(cutB,0,ticks_pt,name)
+	ticks_pt = range(0,500,50)
+	ticks_labels_pt = map(str,ticks_pt)
+        ticks_labels_pt[-1] = r'$\infty$'
+	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name)
 
 	# eta
-	ticks_eta = np.arange(-3,3.5,0.5)
-	Plot_2D(cutB,1,ticks_eta,name)
+	ticks_eta = np.arange(-6,6.5,1)
+	ticks_labels_eta = map(str,ticks_eta)
+	ticks_labels_eta[0] = '-6.28'
+	ticks_labels_eta[-1] = '6.28'
+	Plot_2D(cutB,1,ticks_eta,ticks_labels_eta,name)
 	
 	# y
-	ticks_y = np.arange(-2,2.5,0.5)
-	Plot_2D(cutB,2,ticks_y,name)
+	ticks_y = np.arange(-2.5,3,0.5)
+	ticks_labels_y = map(str,ticks_y)
+	ticks_labels_y[0] = '-'+r'$\infty$'
+	ticks_labels_y[-1] = r'$\infty$'
+	Plot_2D(cutB,2,ticks_y,ticks_labels_y,name)
 
 	# phi
 	ticks_phi = np.arange(-3,3.5,0.5)
-	Plot_2D(cutB,3,ticks_phi,name)
+	ticks_labels_phi = map(str,ticks_phi)
+	ticks_labels_phi[0] = '-3.14'
+	ticks_labels_phi[-1] = '3.14'
+	Plot_2D(cutB,3,ticks_phi,ticks_labels_phi,name)
 
 	# m
-	ticks_m = range(80,260,20)
-	Plot_2D(cutB,4,ticks_m,name)
+	ticks_m = range(100,260,20)
+	ticks_labels_m = map(str,ticks_m)
+	ticks_labels_m[0] = '-'+r'$\infty$'
+	ticks_labels_m[-1] = r'$\infty$'
+	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name)
 
 	# E
 	ticks_E = range(100,1000,100)
-	Plot_2D(cutB,5,ticks_E,name)
+	ticks_labels_E = map(str,ticks_E)
+	ticks_labels_E[-1] = r'$\infty$'
+	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name)
 
 	# pout
-	ticks_pout = range(-200,250,50)
-	Plot_2D(cutB,6,ticks_pout,name)
+	ticks_pout = range(-250,300,50)
+	ticks_labels_pout = map(str,ticks_pout)
+	ticks_labels_pout[0] = '-'+r'$\infty$'
+	ticks_labels_pout[-1] = r'$\infty$'
+	Plot_2D(cutB,6,ticks_pout,ticks_labels_pout,name)
 
 
 # Creates and saves the resolution plots for each variable
@@ -222,6 +241,7 @@ Create_2D_Plots(cutB_ejets,'parton_ejets')
 Plot_Res(df_ejets,cutA_ejets,cutB_ejets,cutC_ejets,'parton_ejets')
 
 
+
 # ------------- PARTON MJETS ------------- #
 
 # Create the main data frame
@@ -248,10 +268,6 @@ Plot_Res(df_mjets,cutA_mjets,cutB_mjets,cutC_mjets,'parton_mjets')
 
 
 
-
-
-# Show plots
-#plt.show()
 
 
 print("done :)")
