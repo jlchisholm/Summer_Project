@@ -4,15 +4,23 @@ import pandas
 import awkward as ak
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
+#matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
 from matplotlib import pyplot as plt
 from matplotlib import colors
 
-# List some useful strings
-var = ['pt','eta','y','phi','m','E','pout']
+# List some useful strings, organized by particle
+par = {'thad' : ['klfitter_bestPerm_topHad_','MC_thad_afterFSR_'],
+       'tlep' : ['klfitter_bestPerm_topLep_','MC_tlep_afterFSR_'],
+       'ttbar': ['klfitter_bestPerm_ttbar_','MC_ttbar_afterFSR_']}
+var = {'thad' : ['pt','eta','y','phi','m','E','pout'], 
+       'tlep': ['pt','eta','y','phi','m','E','pout'], 
+       'ttbar' : ['pt','eta','y','phi','m','E','dphi','Ht','yboost']}
 labels = {'thad' : ['$p_T^{t,had}$','$\eta^{t,had}$','$y^{t,had}$','$\phi^{t,had}$','$m^{t,had}$','$E^{t,had}$','$p_{out}^{t,had}$'], 
-	  'tlep' : ['$p_T^{t,lep}$','$\eta^{t,lep}$','$y^{t,lep}$','$\phi^{t,lep}$','$m^{t,lep}$','$E^{t,lep}$','$p_{out}^{t,lep}$']}
-units = [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'] 
+	  'tlep' : ['$p_T^{t,lep}$','$\eta^{t,lep}$','$y^{t,lep}$','$\phi^{t,lep}$','$m^{t,lep}$','$E^{t,lep}$','$p_{out}^{t,lep}$'],
+	  'ttbar' : ['$p_T^{t\overline{t}}$','$\eta^{t\overline{t}}$','$y^{t\overline{t}}$','$\phi^{t\overline{t}}$','$m^{t\overline{t}}$','$E^{t\overline{t}}$','$\Delta\phi^{t\overline{t}}$','$H_T^{t\overline{t}}$','$y_{boost}^{t\overline{t}}$']}
+units = {'thad' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
+	 'tlep' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
+	 'ttbar': [' [GeV]','','','',' [GeV]',' [GeV]','',' [GeV]','']} 
 
 
 # ---------- FUNCTION DEFINITIONS ---------- #
@@ -34,16 +42,11 @@ def Create_DF(name):
 	df['likelihood'] = ak.to_pandas(tree_reco0['klfitter_logLikelihood'])   # Add logLikelihood of klfitter
 
 	# Add variables to be plotted
-	for i in range(len(var)):
-        	
-		# Hadronic top variables
-		df['reco thad '+var[i]] = ak.to_pandas(tree_reco0['klfitter_bestPerm_topHad_'+var[i]])
-        	df['truth thad '+var[i]] = ak.to_pandas(tree_truth0['MC_thad_afterFSR_'+var[i]])
+	for p in par:                     # For each particle
+		for v in var[p]:          # For each variable of that particle
+			df['reco '+p+' '+v] = ak.to_pandas(tree_reco0[par[p][0]+v])      # Append the reco values
+        		df['truth '+p+' '+v] = ak.to_pandas(tree_truth0[par[p][1]+v])    # Append the true values
 		
-		# Leptonic top variables
-		df['reco tlep '+var[i]] = ak.to_pandas(tree_reco0['klfitter_bestPerm_topLep_'+var[i]])
-		df['truth tlep '+var[i]] = ak.to_pandas(tree_truth0['MC_tlep_afterFSR_'+var[i]])
-
 	# Close root file
 	file0.close()
 	
@@ -66,18 +69,13 @@ def Append_Data(df,n,name):
         df_addon.rename(columns={'values':'reco isMatched'},inplace=True)
         df_addon['likelihood'] = ak.to_pandas(tree_reco_n['klfitter_logLikelihood'])
 
-        # Add variables to be plotted
-        for i in range(len(var)):
-                
-		# Hadronic top variables
-		df_addon['reco thad '+var[i]] = ak.to_pandas(tree_reco_n['klfitter_bestPerm_topHad_'+var[i]])
-                df_addon['truth thad '+var[i]] = ak.to_pandas(tree_truth_n['MC_thad_afterFSR_'+var[i]])
-
-		# Leptonic top variables
-		df_addon['reco tlep '+var[i]] = ak.to_pandas(tree_reco_n['klfitter_bestPerm_topLep_'+var[i]])
-                df_addon['truth tlep '+var[i]] = ak.to_pandas(tree_truth_n['MC_tlep_afterFSR_'+var[i]])
-
-        # Append data to the main data frame
+	# Add variables to be plotted
+        for p in par:                     # For each particle
+                for v in var[p]:          # For each variable of that particle
+                        df_addon['reco '+p+' '+v] = ak.to_pandas(tree_reco_n[par[p][0]+v])      # Append the reco values
+                        df_addon['truth '+p+' '+v] = ak.to_pandas(tree_truth_n[par[p][1]+v])    # Append the true values
+        
+	# Append data to the main data frame
         df = df.append(df_addon,ignore_index=True)
 
         # Close root file
@@ -97,21 +95,15 @@ def Edit_Data(df):
 	indexNames = df[df['reco isMatched'] == 0 ].index
 	df.drop(indexNames,inplace=True)
 
-	# Convert some truth values from MeV to GeV to match reco units
-	df['truth thad pt'] = df['truth thad pt']/1000
-	df['truth thad m'] = df['truth thad m']/1000
-	df['truth thad E'] = df['truth thad E']/1000
-	df['truth thad pout'] = df['truth thad pout']/1000
+	for p in par:                 # For each particle
+		for v in var[p]:      # For each variable of that particle
+        		
+			# Convert from MeV to GeV for some truth values
+			if v in ['pt','m','E','pout','Ht']:             
+                                df['truth '+p+' '+v] = df['truth '+p+' '+v]/1000
 
-	df['truth tlep pt'] = df['truth tlep pt']/1000
-        df['truth tlep m'] = df['truth tlep m']/1000
-        df['truth tlep E'] = df['truth tlep E']/1000
-        df['truth tlep pout'] = df['truth tlep pout']/1000
-
-	# Calculate the resolutions
-	for i in range(len(var)):
-        	df['resolution thad '+var[i]] = df['truth thad '+var[i]]/df['reco thad '+var[i]]-1
-		df['resolution tlep '+var[i]] = df['truth tlep '+var[i]]/df['reco tlep '+var[i]]-1
+			# Calculate the resolutions
+			df['resolution '+p+' '+v] = df['truth '+p+' '+v]/df['reco '+p+' '+v]-1
 
 	return df
 
@@ -130,7 +122,7 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
 	#fig,ax = plt.subplots()
         #ax.set_xticks(ticks)
         #ax.set_yticks(ticks)
-        H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+particle+' '+var[i]],ticks[0],ticks[-1]),np.clip(cutB['truth '+particle+' '+var[i]],ticks[0],ticks[-1]),bins=ticks,range=[ran,ran])
+        H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+particle+' '+var[particle][i]],ticks[0],ticks[-1]),np.clip(cutB['truth '+particle+' '+var[particle][i]],ticks[0],ticks[-1]),bins=ticks,range=[ran,ran])
         #plt.pcolormesh(xedges,yedges,cmap=plt.cm.Blues)
         #plt.xlabel('Reco '+labels[i]+units[i])
         #plt.ylabel('Truth '+labels[i]+units[i])
@@ -139,13 +131,13 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
 	norm = (np.rint((H/np.sum(H.T,axis=1))*100)).T.astype(int)
 
         # Plot truth vs reco pt with normalized rows
-        plt.figure(name+' '+particle+' '+var[i]+' Normalized 2D Plot')
-        masked_norm = np.ma.masked_where(norm==0,norm)  # Needed to make the zero bins whitee
+        plt.figure(name+' '+particle+' '+var[particle][i]+' Normalized 2D Plot')
+        masked_norm = np.ma.masked_where(norm==0,norm)  # Needed to make the zero bins white
         plt.imshow(masked_norm,extent=[0,n-1,0,n-1],cmap=plt.cm.Blues,origin='lower')
         plt.xticks(np.arange(n),ticks_labels,fontsize=9,rotation=-25)
         plt.yticks(np.arange(n),ticks_labels,fontsize=9)
-        plt.xlabel('Reco '+labels[particle][i]+units[i])
-        plt.ylabel('Truth '+labels[particle][i]+units[i])
+        plt.xlabel('Reco '+labels[particle][i]+units[particle][i])
+        plt.ylabel('Truth '+labels[particle][i]+units[particle][i])
         plt.clim(0,100)
         plt.colorbar()
 
@@ -156,8 +148,9 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
                                 plt.text(j+0.5,k+0.5,masked_norm.T[j,k],color="k",fontsize=6,weight="bold",ha="center",va="center")
         
 	# Save the figure as a png
-	plt.savefig('plots/'+name+'/Normalized_2D_'+name+'_'+particle+'_'+var[i],bbox_inches='tight')
-	print 'Saved Figure: Normalized_2D_'+name+'_'+particle+'_'+var[i]
+	plt.savefig('plots/'+name+'/Normalized_2D_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
+	print 'Saved Figure: Normalized_2D_'+name+'_'+particle+'_'+var[particle][i]
+	
 	plt.close()	
 
 
@@ -165,16 +158,8 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
 # Input: cutB of df, data type, and particle
 def Create_2D_Plots(cutB, name, particle):
 	
-	# pt
-	#ticks = [0,50,100,160,225,300,360,475,1000]   # Choose ticks/binning (may be better choices, this was just in the paper)
-	#ticks_labels = ['0','50','100','160','225','300','360','475','1000']
-	ticks_pt = range(0,500,50)
-	ticks_labels_pt = map(str,ticks_pt)
-        ticks_labels_pt[-1] = r'$\infty$'
-	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name,particle)
-
 	# eta
-	ticks_eta = np.arange(-6,6.5,1)
+	ticks_eta = np.arange(-6,7.5,1.5)
 	ticks_labels_eta = map(str,ticks_eta)
 	ticks_labels_eta[0] = '-6.28'
 	ticks_labels_eta[-1] = '6.28'
@@ -188,31 +173,80 @@ def Create_2D_Plots(cutB, name, particle):
 	Plot_2D(cutB,2,ticks_y,ticks_labels_y,name,particle)
 
 	# phi
-	ticks_phi = np.arange(-3,3.5,0.5)
+	ticks_phi = np.arange(-3,3.75,0.75)
 	ticks_labels_phi = map(str,ticks_phi)
 	ticks_labels_phi[0] = '-3.14'
 	ticks_labels_phi[-1] = '3.14'
 	Plot_2D(cutB,3,ticks_phi,ticks_labels_phi,name,particle)
 
-	# m
-	ticks_m = range(100,260,20)
-	ticks_labels_m = map(str,ticks_m)
-	ticks_labels_m[0] = '-'+r'$\infty$'
-	ticks_labels_m[-1] = r'$\infty$'
-	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name,particle)
+	if particle == 'thad' or particle == 'tlep':
 
-	# E
-	ticks_E = range(100,1000,100)
-	ticks_labels_E = map(str,ticks_E)
-	ticks_labels_E[-1] = r'$\infty$'
-	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name,particle)
+		# pt
+        	#ticks = [0,50,100,160,225,300,360,475,1000]   # Choose ticks/binning (may be better choices, this was just in the paper)
+        	#ticks_labels = ['0','50','100','160','225','300','360','475','1000']
+        	ticks_pt = range(0,500,50)
+        	ticks_labels_pt = map(str,ticks_pt)
+        	ticks_labels_pt[-1] = r'$\infty$'
+        	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name,particle)
+	
+		# m
+        	ticks_m = range(100,260,20)
+        	ticks_labels_m = map(str,ticks_m)
+        	ticks_labels_m[0] = '-'+r'$\infty$'
+        	ticks_labels_m[-1] = r'$\infty$'
+        	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name,particle)
+	
+		# E
+        	ticks_E = range(100,1000,100)
+        	ticks_labels_E = map(str,ticks_E)
+        	ticks_labels_E[-1] = r'$\infty$'
+        	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name,particle)
 
-	# pout
-	ticks_pout = range(-250,300,50)
-	ticks_labels_pout = map(str,ticks_pout)
-	ticks_labels_pout[0] = '-'+r'$\infty$'
-	ticks_labels_pout[-1] = r'$\infty$'
-	Plot_2D(cutB,6,ticks_pout,ticks_labels_pout,name,particle)
+		# pout
+		ticks_pout = range(-250,300,50)
+		ticks_labels_pout = map(str,ticks_pout)
+		ticks_labels_pout[0] = '-'+r'$\infty$'
+		ticks_labels_pout[-1] = r'$\infty$'
+		Plot_2D(cutB,6,ticks_pout,ticks_labels_pout,name,particle)
+
+	elif particle == 'ttbar':
+		
+		# pt
+        	ticks_pt = range(0,500,50)
+        	ticks_labels_pt = map(str,ticks_pt)
+        	ticks_labels_pt[-1] = r'$\infty$'
+        	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name,particle)
+
+		# m
+        	ticks_m = range(200,1100,100)
+        	ticks_labels_m = map(str,ticks_m)
+        	ticks_labels_m[-1] = r'$\infty$'
+        	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name,particle)
+		
+		# E
+        	ticks_E = range(200,2200,200)
+        	ticks_labels_E = map(str,ticks_E)
+        	ticks_labels_E[-1] = r'$\infty$'
+        	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name,particle)
+
+		# dphi
+		ticks_dphi = np.arange(0,3.5,0.5)
+		ticks_labels_dphi = map(str,ticks_dphi)
+		ticks_labels_dphi[-1] = '3.14'
+		Plot_2D(cutB,6,ticks_dphi,ticks_labels_dphi,name,particle)		
+
+		# Ht
+		ticks_Ht = range(0,1100,100)
+		ticks_labels_Ht = map(str,ticks_Ht)
+		ticks_labels_Ht[-1] = r'$\infty$'
+		Plot_2D(cutB,7,ticks_Ht,ticks_labels_Ht,name,particle)
+
+		# yboost
+		ticks_yboost = np.arange(-3,3.5,0.75)
+		ticks_labels_yboost = map(str,ticks_yboost)
+		ticks_labels_yboost[0] = '-3.14'
+		ticks_labels_yboost[-1] = '3.14'
+		Plot_2D(cutB,8,ticks_yboost,ticks_labels_yboost,name,particle)
 
 
 # Creates and saves the resolution plots for each variable
@@ -220,74 +254,52 @@ def Create_2D_Plots(cutB, name, particle):
 def Plot_Res(df,cutA,cutB,cutC,name,particle):
 	
 	# Create each resolution plot
-	for i in range(len(var)):
-        	plt.figure(name+' '+particle+' '+var[i]+' Resolution')
-        	plt.hist(df['resolution '+particle+' '+var[i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutA['resolution '+particle+' '+var[i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutB['resolution '+particle+' '+var[i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutC['resolution '+particle+' '+var[i]],bins=100,range=(-1,1),histtype='step')
+	for i in range(len(var[particle])):
+        	plt.figure(name+' '+particle+' '+var[particle][i]+' Resolution')
+        	plt.hist(df['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
+        	plt.hist(cutA['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
+        	plt.hist(cutB['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
+        	plt.hist(cutC['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
         	plt.xlabel(labels[particle][i]+' Resolution')
         	plt.ylabel('Counts')
         	plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
-        	plt.savefig('plots/'+name+'/Resolution_'+name+'_'+particle+'_'+var[i],bbox_inches='tight')
+        	plt.savefig('plots/'+name+'/Resolution_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
+		print 'Saved Figure: Resolution_'+name+'_'+particle+'_'+var[particle][i]
 		
-		print 'Saved Figure: Resolution_'+name+'_'+particle+'_'+var[i]
 		plt.close()
 
-		
-# ------------- PARTON EJETS ------------- #
 
-# Create the main data frame
-df_ejets = Create_DF('parton_ejets')
+# Creates the data frame and plots for a given set of data files
+# Input: data type
+def Run_Plotting(name):
 
-# Append all data to the main frame
-for n in range(1,8):
-        df_ejets = Append_Data(df_ejets,str(n),'parton_ejets')
+	# Create the main data frame
+	df = Create_DF(name)
 
-# Edit(?) Data (remove unmatched, convert units, calculate resolution, etc.)
-df_ejets = Edit_Data(df_ejets)
+	# Append all data to the main frame
+	for n in range(1,8):
+        	df = Append_Data(df,str(n),name)
 
-# Cut rows where likelihood <= some number (currently saved as a copy and not the original df)
-cutA_ejets = df_ejets[df_ejets['likelihood']>-52]
-cutB_ejets = df_ejets[df_ejets['likelihood']>-50]
-cutC_ejets = df_ejets[df_ejets['likelihood']>-48]
+	# Edit data (remove unmatched, convert units, calculate resolution, etc.)
+	df = Edit_Data(df)
 
-# Create 2D plots
-Create_2D_Plots(cutB_ejets,'parton_ejets','thad')
-Create_2D_Plots(cutB_ejets,'parton_ejets','tlep')
+	# Cut rows where likelihood <= some number (currently saved as a copy and not the original df)
+	cutA = df[df['likelihood']>-52]
+	cutB = df[df['likelihood']>-50]
+	cutC = df[df['likelihood']>-48]
 
-# Create Resolution Plots
-Plot_Res(df_ejets,cutA_ejets,cutB_ejets,cutC_ejets,'parton_ejets','thad')
-Plot_Res(df_ejets,cutA_ejets,cutB_ejets,cutC_ejets,'parton_ejets','tlep')
+	# Create 2D plots
+	for p in par:
+		Create_2D_Plots(cutB,name,p)
 
-
-# ------------- PARTON MJETS ------------- #
-
-# Create the main data frame
-df_mjets = Create_DF('parton_mjets')
-
-# Append all data to the main frame
-for n in range(1,8):
-        df_mjets = Append_Data(df_mjets,str(n),'parton_mjets')
-
-# Edit(?) Data (remove unmatched, convert units, calculate resolution, etc.)
-df_mjets = Edit_Data(df_mjets)
-
-# Cut rows where likelihood <= some number (currently saved as a copy and not the original df)
-cutA_mjets = df_mjets[df_mjets['likelihood']>-52]
-cutB_mjets = df_mjets[df_mjets['likelihood']>-50]
-cutC_mjets = df_mjets[df_mjets['likelihood']>-48]
-
-# Create 2D plots
-Create_2D_Plots(cutB_mjets,'parton_mjets','thad')
-Create_2D_Plots(cutB_mjets,'parton_mjets','tlep')
-
-# Create Resolution Plots
-Plot_Res(df_mjets,cutA_mjets,cutB_mjets,cutC_mjets,'parton_mjets','thad')
-Plot_Res(df_mjets,cutA_mjets,cutB_mjets,cutC_mjets,'parton_mjets','tlep')
+	# Create Resolution Plots
+	for p in par:
+		Plot_Res(df,cutA,cutB,cutC,name,p)
 
 
+# ------------- MAIN CODE ------------- #
 
-
+Run_Plotting('parton_ejets')
+#Run_Plotting('parton_mjets')
 
 print("done :)")
