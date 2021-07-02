@@ -1,12 +1,14 @@
 # Import useful packages
 import uproot
-import pandas
+import pandas as pd
 import awkward as ak
 import numpy as np
 import matplotlib
-#matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
+matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
 from matplotlib import pyplot as plt
 from matplotlib import colors
+from scipy.optimize import curve_fit
+
 
 # List some useful strings, organized by particle
 par = {'thad' : ['klfitter_bestPerm_topHad_','MC_thad_afterFSR_'],
@@ -21,6 +23,93 @@ labels = {'thad' : ['$p_T^{t,had}$','$\eta^{t,had}$','$y^{t,had}$','$\phi^{t,had
 units = {'thad' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
 	 'tlep' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
 	 'ttbar': [' [GeV]','','','',' [GeV]',' [GeV]','',' [GeV]','']} 
+
+
+# Defines bins/ticks for each variable
+
+# eta
+ticks_eta = np.arange(-6,7.5,1.5)
+ticks_labels_eta = map(str,ticks_eta)
+ticks_labels_eta[0] = '-'+r'$\infty$'
+ticks_labels_eta[-1] = r'$\infty$'
+
+# y
+ticks_y = np.arange(-2.5,3,0.5)
+ticks_labels_y = map(str,ticks_y)
+ticks_labels_y[0] = '-'+r'$\infty$'
+ticks_labels_y[-1] = r'$\infty$'
+
+# phi
+ticks_phi = np.arange(-3,3.75,0.75)
+ticks_labels_phi = map(str,ticks_phi)
+ticks_labels_phi[0] = '-3.14'
+ticks_labels_phi[-1] = '3.14'
+
+# thad or tlep:
+
+# pt
+ticks_pt_t = range(0,500,50)
+ticks_labels_pt_t = map(str,ticks_pt_t)
+ticks_labels_pt_t[-1] = r'$\infty$'
+
+# m
+ticks_m_t = range(100,260,20)
+ticks_labels_m_t = map(str,ticks_m_t)
+ticks_labels_m_t[0] = '-'+r'$\infty$'
+ticks_labels_m_t[-1] = r'$\infty$'
+
+# E
+ticks_E_t = range(100,1000,100)
+ticks_labels_E_t = map(str,ticks_E_t)
+ticks_labels_E_t[-1] = r'$\infty$'
+
+# pout
+ticks_pout_t = range(-250,300,50)
+ticks_labels_pout_t = map(str,ticks_pout_t)
+ticks_labels_pout_t[0] = '-'+r'$\infty$'
+ticks_labels_pout_t[-1] = r'$\infty$'
+
+# ttbar:
+
+# pt
+ticks_pt_ttbar = range(0,500,50)
+ticks_labels_pt_ttbar = map(str,ticks_pt_ttbar)
+ticks_labels_pt_ttbar[-1] = r'$\infty$'
+
+# m
+ticks_m_ttbar = range(200,1100,100)
+ticks_labels_m_ttbar = map(str,ticks_m_ttbar)
+ticks_labels_m_ttbar[-1] = r'$\infty$'
+
+# E
+ticks_E_ttbar = range(200,2200,200)
+ticks_labels_E_ttbar = map(str,ticks_E_ttbar)
+ticks_labels_E_ttbar[-1] = r'$\infty$'
+
+# dphi
+ticks_dphi_ttbar = np.arange(0,4,0.5)
+ticks_labels_dphi_ttbar = map(str,ticks_dphi_ttbar)
+ticks_labels_dphi_ttbar[-1] = r'$\infty$'
+
+# Ht
+ticks_Ht_ttbar = range(0,1100,100)
+ticks_labels_Ht_ttbar = map(str,ticks_Ht_ttbar)
+ticks_labels_Ht_ttbar[-1] = r'$\infty$'
+
+# yboost
+ticks_yboost_ttbar = np.arange(-3,3.5,0.75)
+ticks_labels_yboost_ttbar = map(str,ticks_yboost_ttbar)
+ticks_labels_yboost_ttbar[0] = '-'+r'$\infty$'
+ticks_labels_yboost_ttbar[-1] = r'$\infty$'
+
+
+ticks = {'thad' : [ticks_pt_t, ticks_eta, ticks_y, ticks_phi, ticks_m_t, ticks_E_t, ticks_pout_t],
+         'tlep' : [ticks_pt_t, ticks_eta, ticks_y, ticks_phi, ticks_m_t, ticks_E_t, ticks_pout_t],
+         'ttbar' : [ticks_pt_ttbar, ticks_eta, ticks_y, ticks_phi, ticks_m_ttbar, ticks_E_ttbar, ticks_dphi_ttbar, ticks_Ht_ttbar, ticks_yboost_ttbar]}
+ticks_labels = {'thad' : [ticks_labels_pt_t, ticks_labels_eta, ticks_labels_y, ticks_labels_phi, ticks_labels_m_t, ticks_labels_E_t, ticks_labels_pout_t],
+                'tlep' : [ticks_labels_pt_t, ticks_labels_eta, ticks_labels_y, ticks_labels_phi, ticks_labels_m_t, ticks_labels_E_t, ticks_labels_pout_t],
+                'ttbar' : [ticks_labels_pt_ttbar, ticks_labels_eta, ticks_labels_y, ticks_labels_phi, ticks_labels_m_ttbar, ticks_labels_E_ttbar, ticks_labels_dphi_ttbar, ticks_labels_Ht_ttbar, ticks_labels_yboost_ttbar]}
+
 
 
 # ---------- FUNCTION DEFINITIONS ---------- #
@@ -95,6 +184,10 @@ def Edit_Data(df):
 	indexNames = df[df['reco isMatched'] == 0 ].index
 	df.drop(indexNames,inplace=True)
 
+	# Need to drop rows with inf or NaN values (a fix for now)
+	df.replace([np.inf, -np.inf], np.nan, inplace=True)
+	df.dropna(subset=['truth thad y'],inplace=True)
+
 	for p in par:                 # For each particle
 		for v in var[p]:      # For each variable of that particle
         		
@@ -103,7 +196,10 @@ def Edit_Data(df):
                                 df['truth '+p+' '+v] = df['truth '+p+' '+v]/1000
 
 			# Calculate the resolutions
-			df['resolution '+p+' '+v] = df['truth '+p+' '+v]/df['reco '+p+' '+v]-1
+			if v in ['eta','y','phi']:    # Don't want to divide by 0, so we calculate residual resolution here
+				df['resolution '+p+' '+v] = df['reco '+p+' '+v]-df['truth '+p+' '+v]
+			else:
+				df['resolution '+p+' '+v] = (df['reco '+p+' '+v]-df['truth '+p+' '+v])/df['truth '+p+' '+v]
 
 	return df
 
@@ -111,18 +207,20 @@ def Edit_Data(df):
 # Creates and saves the 2D histogram normalized by rows
 # Input: cutB of df, variable index, chosen bins/ticks, tick labels, data type, and particle
 # Output: saves histogram as png
-def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
+def Plot_2D(cutB,i,name,particle):
 
 	# Define useful constants
-        n = len(ticks)
-        ran = ticks[::n-1]
+        tk = ticks[particle][i]
+	tkls = ticks_labels[particle][i]
+	n = len(tk)
+        ran = tk[::n-1]
 
         # Create 2D array of truth vs reco variable (which can be plotted also)
         #plt.figure('2D')
 	#fig,ax = plt.subplots()
         #ax.set_xticks(ticks)
         #ax.set_yticks(ticks)
-        H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+particle+' '+var[particle][i]],ticks[0],ticks[-1]),np.clip(cutB['truth '+particle+' '+var[particle][i]],ticks[0],ticks[-1]),bins=ticks,range=[ran,ran])
+        H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+particle+' '+var[particle][i]],tk[0],tk[-1]),np.clip(cutB['truth '+particle+' '+var[particle][i]],tk[0],tk[-1]),bins=tk,range=[ran,ran])
         #plt.pcolormesh(xedges,yedges,cmap=plt.cm.Blues)
         #plt.xlabel('Reco '+labels[i]+units[i])
         #plt.ylabel('Truth '+labels[i]+units[i])
@@ -134,8 +232,8 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
         plt.figure(name+' '+particle+' '+var[particle][i]+' Normalized 2D Plot')
         masked_norm = np.ma.masked_where(norm==0,norm)  # Needed to make the zero bins white
         plt.imshow(masked_norm,extent=[0,n-1,0,n-1],cmap=plt.cm.Blues,origin='lower')
-        plt.xticks(np.arange(n),ticks_labels,fontsize=9,rotation=-25)
-        plt.yticks(np.arange(n),ticks_labels,fontsize=9)
+        plt.xticks(np.arange(n),tkls,fontsize=9,rotation=-25)
+        plt.yticks(np.arange(n),tkls,fontsize=9)
         plt.xlabel('Reco '+labels[particle][i]+units[particle][i])
         plt.ylabel('Truth '+labels[particle][i]+units[particle][i])
         plt.clim(0,100)
@@ -148,105 +246,10 @@ def Plot_2D(cutB,i,ticks,ticks_labels,name,particle):
                                 plt.text(j+0.5,k+0.5,masked_norm.T[j,k],color="k",fontsize=6,weight="bold",ha="center",va="center")
         
 	# Save the figure as a png
-	plt.savefig('plots/'+name+'/Normalized_2D_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
+	plt.savefig('plots/'+name+'/'+particle+'/Normalized_2D_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
 	print 'Saved Figure: Normalized_2D_'+name+'_'+particle+'_'+var[particle][i]
 	
 	plt.close()	
-
-
-# Defines bins/ticks and implements Plot_2D for each variable
-# Input: cutB of df, data type, and particle
-def Create_2D_Plots(cutB, name, particle):
-	
-	# eta
-	ticks_eta = np.arange(-6,7.5,1.5)
-	ticks_labels_eta = map(str,ticks_eta)
-	ticks_labels_eta[0] = '-6.28'
-	ticks_labels_eta[-1] = '6.28'
-	Plot_2D(cutB,1,ticks_eta,ticks_labels_eta,name,particle)
-	
-	# y
-	ticks_y = np.arange(-2.5,3,0.5)
-	ticks_labels_y = map(str,ticks_y)
-	ticks_labels_y[0] = '-'+r'$\infty$'
-	ticks_labels_y[-1] = r'$\infty$'
-	Plot_2D(cutB,2,ticks_y,ticks_labels_y,name,particle)
-
-	# phi
-	ticks_phi = np.arange(-3,3.75,0.75)
-	ticks_labels_phi = map(str,ticks_phi)
-	ticks_labels_phi[0] = '-3.14'
-	ticks_labels_phi[-1] = '3.14'
-	Plot_2D(cutB,3,ticks_phi,ticks_labels_phi,name,particle)
-
-	if particle == 'thad' or particle == 'tlep':
-
-		# pt
-        	#ticks = [0,50,100,160,225,300,360,475,1000]   # Choose ticks/binning (may be better choices, this was just in the paper)
-        	#ticks_labels = ['0','50','100','160','225','300','360','475','1000']
-        	ticks_pt = range(0,500,50)
-        	ticks_labels_pt = map(str,ticks_pt)
-        	ticks_labels_pt[-1] = r'$\infty$'
-        	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name,particle)
-	
-		# m
-        	ticks_m = range(100,260,20)
-        	ticks_labels_m = map(str,ticks_m)
-        	ticks_labels_m[0] = '-'+r'$\infty$'
-        	ticks_labels_m[-1] = r'$\infty$'
-        	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name,particle)
-	
-		# E
-        	ticks_E = range(100,1000,100)
-        	ticks_labels_E = map(str,ticks_E)
-        	ticks_labels_E[-1] = r'$\infty$'
-        	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name,particle)
-
-		# pout
-		ticks_pout = range(-250,300,50)
-		ticks_labels_pout = map(str,ticks_pout)
-		ticks_labels_pout[0] = '-'+r'$\infty$'
-		ticks_labels_pout[-1] = r'$\infty$'
-		Plot_2D(cutB,6,ticks_pout,ticks_labels_pout,name,particle)
-
-	elif particle == 'ttbar':
-		
-		# pt
-        	ticks_pt = range(0,500,50)
-        	ticks_labels_pt = map(str,ticks_pt)
-        	ticks_labels_pt[-1] = r'$\infty$'
-        	Plot_2D(cutB,0,ticks_pt,ticks_labels_pt,name,particle)
-
-		# m
-        	ticks_m = range(200,1100,100)
-        	ticks_labels_m = map(str,ticks_m)
-        	ticks_labels_m[-1] = r'$\infty$'
-        	Plot_2D(cutB,4,ticks_m,ticks_labels_m,name,particle)
-		
-		# E
-        	ticks_E = range(200,2200,200)
-        	ticks_labels_E = map(str,ticks_E)
-        	ticks_labels_E[-1] = r'$\infty$'
-        	Plot_2D(cutB,5,ticks_E,ticks_labels_E,name,particle)
-
-		# dphi
-		ticks_dphi = np.arange(0,3.5,0.5)
-		ticks_labels_dphi = map(str,ticks_dphi)
-		ticks_labels_dphi[-1] = '3.14'
-		Plot_2D(cutB,6,ticks_dphi,ticks_labels_dphi,name,particle)		
-
-		# Ht
-		ticks_Ht = range(0,1100,100)
-		ticks_labels_Ht = map(str,ticks_Ht)
-		ticks_labels_Ht[-1] = r'$\infty$'
-		Plot_2D(cutB,7,ticks_Ht,ticks_labels_Ht,name,particle)
-
-		# yboost
-		ticks_yboost = np.arange(-3,3.5,0.75)
-		ticks_labels_yboost = map(str,ticks_yboost)
-		ticks_labels_yboost[0] = '-3.14'
-		ticks_labels_yboost[-1] = '3.14'
-		Plot_2D(cutB,8,ticks_yboost,ticks_labels_yboost,name,particle)
 
 
 # Creates and saves the resolution plots for each variable
@@ -255,7 +258,9 @@ def Plot_Res(df,cutA,cutB,cutC,name,particle):
 	
 	# Create each resolution plot
 	for i in range(len(var[particle])):
-        	plt.figure(name+' '+particle+' '+var[particle][i]+' Resolution')
+        	
+		# Create 1D resolution plot
+		plt.figure(name+' '+particle+' '+var[particle][i]+' Resolution')
         	plt.hist(df['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
         	plt.hist(cutA['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
         	plt.hist(cutB['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
@@ -263,10 +268,80 @@ def Plot_Res(df,cutA,cutB,cutC,name,particle):
         	plt.xlabel(labels[particle][i]+' Resolution')
         	plt.ylabel('Counts')
         	plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
-        	plt.savefig('plots/'+name+'/Resolution_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
+        	
+		# Save and close figure
+		plt.savefig('plots/'+name+'/'+particle+'/Resolution_'+name+'_'+particle+'_'+var[particle][i],bbox_inches='tight')
 		print 'Saved Figure: Resolution_'+name+'_'+particle+'_'+var[particle][i]
-		
 		plt.close()
+
+
+# Creates and saves the resolution vs variable plots
+# Input: cutB of df, data type, particle, variable, index of variable, and [first bin edge, last bin edge, width of bins]
+def Plot_Res_vs_Var(cutB,name,particle,variable,i,bins):
+
+	data = []   # Array to hold var vs fwhm values
+	for bottom_edge in np.arange(bins[0],bins[1],bins[2]):	
+
+		# Set some helpful variables
+		top_edge = bottom_edge+bins[2]
+		middle = bottom_edge+(bins[2]/2)
+
+		# Look at resolution at a particular value of var
+		cut_temp = cutB[cutB['truth '+particle+' '+variable]>=bottom_edge]      # Should I fold in edges of first and last?
+		cut_temp = cut_temp[cut_temp['truth '+particle+' '+variable]<top_edge]
+
+		# Make the resolution plot at the particular var
+		#plt.figure(name+' '+particle+' '+variable+' Resolution at '+str(middle))
+		yhist, xhist, im = plt.hist(cut_temp['resolution '+particle+' '+variable],bins=200,range=(-1,1),histtype='step')
+
+		# Need to convert to normal array so we can index	
+		yhist = yhist.tolist()
+		xhist = xhist.tolist()
+
+		# Find the array index of the maximum of the plot
+		max_val = np.max(yhist)
+		max_index = yhist.index(max_val)
+
+		# Divide the array into the left and right halves (makes finding mid values easier)
+		left_half = yhist[:max_index]
+		right_half = yhist[max_index:]
+		
+		# Determine the bin content (and its index) that is closest to half the max on each side
+		half_max = max_val/2
+		half_max_l = min(left_half,key=lambda x:abs(x-half_max))
+		half_max_r = min(right_half,key=lambda x:abs(x-half_max))
+		left_index = left_half.index(half_max_l)
+		right_index = right_half.index(half_max_r)+max_index
+
+		# Get the x value at the half max locations and calculate fwhm
+		x_l = xhist[left_index]
+		x_r = xhist[right_index]
+		fwhm = x_r - x_l
+		
+		# Second method
+                sigma = cut_temp['resolution '+particle+' '+variable].std(ddof=0)
+                fwhm2 = 2*np.sqrt(2*np.log(2))*sigma
+                mean = cut_temp['resolution '+particle+' '+variable].mean()
+
+		# Append the data from this particular var
+		data.append([middle,fwhm,bins[2]/2,sigma,fwhm2,mean])
+		
+	# Convert the array to a pandas data frame for easy reading	
+	df_res = pd.DataFrame(data,columns=(variable,'res fwhm','p/m','sigma2','fwhm2','mean2'))
+
+	# Create a plot
+	plt.figure(variable+' Resolution')
+	plt.scatter(df_res[variable], df_res['res fwhm'])
+	plt.scatter(df_res[variable], df_res['fwhm2'])
+	#plt.ylim(0,0.6)
+	plt.legend(['Method 1: Determined From Plot','Method 2: Calculated From DF'])
+	plt.xlabel('Truth '+labels[particle][i]+units[particle][i])
+	plt.ylabel(labels[particle][i]+' Resolution Width')
+
+	# Save and close figure
+        plt.savefig('plots/'+name+'/'+particle+'/Resolution_vs_'+variable+'_'+name+'_'+particle,bbox_inches='tight')
+        print 'Saved Figure: Resolution_vs_'+variable+'_'+name+'_'+particle
+       	plt.close()
 
 
 # Creates the data frame and plots for a given set of data files
@@ -290,16 +365,20 @@ def Run_Plotting(name):
 
 	# Create 2D plots
 	for p in par:
-		Create_2D_Plots(cutB,name,p)
+		for i in range(len(var[p])):
+			Plot_2D(cutB,i,name,p)
 
-	# Create Resolution Plots
+	# Create resolution plots
 	for p in par:
 		Plot_Res(df,cutA,cutB,cutC,name,p)
+		Plot_Res_vs_Var(cutB,name,p,'eta',1,[-2.4,2.4,0.1])
+		Plot_Res_vs_Var(cutB,name,p,'pt',0,[90,510,20])	
+
 
 
 # ------------- MAIN CODE ------------- #
 
 Run_Plotting('parton_ejets')
-#Run_Plotting('parton_mjets')
+Run_Plotting('parton_mjets')
 
 print("done :)")
