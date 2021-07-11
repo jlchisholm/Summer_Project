@@ -4,7 +4,7 @@ import pandas as pd
 import awkward as ak
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
+#matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from scipy.optimize import curve_fit
@@ -319,22 +319,35 @@ def Plot_Res_vs_Var(cutB,name,particle,variable,i,bins):
 		fwhm = x_r - x_l
 		
 		# Second method
-                sigma = cut_temp['resolution '+particle+' '+variable].std(ddof=0)
-                fwhm2 = 2*np.sqrt(2*np.log(2))*sigma
-                mean = cut_temp['resolution '+particle+' '+variable].mean()
+                sigma2 = cut_temp['resolution '+particle+' '+variable].std(ddof=0)
+                fwhm2 = 2*np.sqrt(2*np.log(2))*sigma2
+                mean2 = cut_temp['resolution '+particle+' '+variable].mean()
+
+
+		
+		# Third method
+		mid_bins = xhist[:-1] + np.diff(xhist)/2
+		mean3 = np.average(mid_bins, weights=yhist)
+		var3 = np.average((mid_bins - mean3)**2,weights=yhist)
+		sigma3 = np.sqrt(var3)
+		fwhm3 = 2*np.sqrt(2*np.log(2))*sigma3
+
+
 
 		# Append the data from this particular var
-		data.append([middle,fwhm,bins[2]/2,sigma,fwhm2,mean])
+		data.append([middle,fwhm,bins[2]/2,sigma2,fwhm2,mean2,sigma3,fwhm3,mean3])
 		
 	# Convert the array to a pandas data frame for easy reading	
-	df_res = pd.DataFrame(data,columns=(variable,'res fwhm','p/m','sigma2','fwhm2','mean2'))
+	df_res = pd.DataFrame(data,columns=(variable,'res fwhm','p/m','sigma2','fwhm2','mean2','sigma3','fwhm3','mean3'))
+	print df_res
 
 	# Create a plot
 	plt.figure(variable+' Resolution')
 	plt.scatter(df_res[variable], df_res['res fwhm'])
 	plt.scatter(df_res[variable], df_res['fwhm2'])
+	plt.scatter(df_res[variable], df_res['fwhm3'])
 	#plt.ylim(0,0.6)
-	plt.legend(['Method 1: Determined From Plot','Method 2: Calculated From DF'])
+	plt.legend(['Method 1','Method 2','Method 3'])
 	plt.xlabel('Truth '+labels[particle][i]+units[particle][i])
 	plt.ylabel(labels[particle][i]+' Resolution Width')
 
