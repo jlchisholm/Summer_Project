@@ -4,7 +4,7 @@ import pandas as pd
 import awkward as ak
 import numpy as np
 import matplotlib
-#matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
+matplotlib.use('Agg')  # need for not displaying plots when running batch jobs
 from matplotlib import pyplot as plt
 from matplotlib import colors
 from scipy.optimize import curve_fit
@@ -23,7 +23,6 @@ labels = {'thad' : ['$p_T^{t,had}$','$\eta^{t,had}$','$y^{t,had}$','$\phi^{t,had
 units = {'thad' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
 	 'tlep' : [' [GeV]','','','',' [GeV]',' [GeV]',' [GeV]'], 
 	 'ttbar': [' [GeV]','','','',' [GeV]',' [GeV]','',' [GeV]','']} 
-
 
 # Defines bins/ticks for each variable
 
@@ -216,14 +215,7 @@ def Plot_2D(cutB,i,name,particle):
         ran = tk[::n-1]
 
         # Create 2D array of truth vs reco variable (which can be plotted also)
-        #plt.figure('2D')
-	#fig,ax = plt.subplots()
-        #ax.set_xticks(ticks)
-        #ax.set_yticks(ticks)
         H, xedges, yedges, im = plt.hist2d(np.clip(cutB['reco '+particle+' '+var[particle][i]],tk[0],tk[-1]),np.clip(cutB['truth '+particle+' '+var[particle][i]],tk[0],tk[-1]),bins=tk,range=[ran,ran])
-        #plt.pcolormesh(xedges,yedges,cmap=plt.cm.Blues)
-        #plt.xlabel('Reco '+labels[i]+units[i])
-        #plt.ylabel('Truth '+labels[i]+units[i])
 
 	# Normalize the rows out of 100 and round to integers
 	norm = (np.rint((H/np.sum(H.T,axis=1))*100)).T.astype(int)
@@ -259,12 +251,16 @@ def Plot_Res(df,cutA,cutB,cutC,name,particle):
 	# Create each resolution plot
 	for i in range(len(var[particle])):
         	
+		# Define the absolute range for the resolution plot
+		v = var[particle][i]
+		ran = 5 if v=='pout' else 1		
+
 		# Create 1D resolution plot
 		plt.figure(name+' '+particle+' '+var[particle][i]+' Resolution')
-        	plt.hist(df['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutA['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutB['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
-        	plt.hist(cutC['resolution '+particle+' '+var[particle][i]],bins=100,range=(-1,1),histtype='step')
+        	plt.hist(df['resolution '+particle+' '+var[particle][i]],bins=100,range=(-ran,ran),histtype='step')
+        	plt.hist(cutA['resolution '+particle+' '+var[particle][i]],bins=100,range=(-ran,ran),histtype='step')
+        	plt.hist(cutB['resolution '+particle+' '+var[particle][i]],bins=100,range=(-ran,ran),histtype='step')
+        	plt.hist(cutC['resolution '+particle+' '+var[particle][i]],bins=100,range=(-ran,ran),histtype='step')
         	plt.xlabel(labels[particle][i]+' Resolution')
         	plt.ylabel('Counts')
         	plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
@@ -276,8 +272,8 @@ def Plot_Res(df,cutA,cutB,cutC,name,particle):
 
 
 # Creates and saves the resolution vs variable plots
-# Input: cutB of df, data type, particle, variable, index of variable, and [first bin edge, last bin edge, width of bins]
-def Plot_Res_vs_Var(cutB,name,particle,variable,i,bins):
+# Input: cutB of df, data type, particle, resolution (y) variable, (x) variable, index of y variable, index of x variable, and [first bin edge, last bin edge, width of bins]
+def Plot_Res_vs_Var(cutB,name,particle,y_var,x_var,iy,ix,bins):
 
 	data = []   # Array to hold var vs fwhm values
 	for bottom_edge in np.arange(bins[0],bins[1],bins[2]):	
@@ -287,73 +283,29 @@ def Plot_Res_vs_Var(cutB,name,particle,variable,i,bins):
 		middle = bottom_edge+(bins[2]/2)
 
 		# Look at resolution at a particular value of var
-		cut_temp = cutB[cutB['truth '+particle+' '+variable]>=bottom_edge]      # Should I fold in edges of first and last?
-		cut_temp = cut_temp[cut_temp['truth '+particle+' '+variable]<top_edge]
+		cut_temp = cutB[cutB['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
+		cut_temp = cut_temp[cut_temp['truth '+particle+' '+x_var]<top_edge]
 
-		# Make the resolution plot at the particular var
-		#plt.figure(name+' '+particle+' '+variable+' Resolution at '+str(middle))
-		yhist, xhist, im = plt.hist(cut_temp['resolution '+particle+' '+variable],bins=200,range=(-1,1),histtype='step')
-
-		# Need to convert to normal array so we can index	
-		yhist = yhist.tolist()
-		xhist = xhist.tolist()
-
-		# Find the array index of the maximum of the plot
-		max_val = np.max(yhist)
-		max_index = yhist.index(max_val)
-
-		# Divide the array into the left and right halves (makes finding mid values easier)
-		left_half = yhist[:max_index]
-		right_half = yhist[max_index:]
-		
-		# Determine the bin content (and its index) that is closest to half the max on each side
-		half_max = max_val/2
-		half_max_l = min(left_half,key=lambda x:abs(x-half_max))
-		half_max_r = min(right_half,key=lambda x:abs(x-half_max))
-		left_index = left_half.index(half_max_l)
-		right_index = right_half.index(half_max_r)+max_index
-
-		# Get the x value at the half max locations and calculate fwhm
-		x_l = xhist[left_index]
-		x_r = xhist[right_index]
-		fwhm = x_r - x_l
-		
-		# Second method
-                sigma2 = cut_temp['resolution '+particle+' '+variable].std(ddof=0)
-                fwhm2 = 2*np.sqrt(2*np.log(2))*sigma2
-                mean2 = cut_temp['resolution '+particle+' '+variable].mean()
-
-
-		
-		# Third method
-		mid_bins = xhist[:-1] + np.diff(xhist)/2
-		mean3 = np.average(mid_bins, weights=yhist)
-		var3 = np.average((mid_bins - mean3)**2,weights=yhist)
-		sigma3 = np.sqrt(var3)
-		fwhm3 = 2*np.sqrt(2*np.log(2))*sigma3
-
-
+		# Get standard deviation with dataframe methods
+                sigma = cut_temp['resolution '+particle+' '+y_var].std()
+                mean = cut_temp['resolution '+particle+' '+y_var].mean()
 
 		# Append the data from this particular var
-		data.append([middle,fwhm,bins[2]/2,sigma2,fwhm2,mean2,sigma3,fwhm3,mean3])
-		
+		#data.append([middle,sigma1,mean1,sigma2,mean2,bins[2]/2])
+		data.append([middle,sigma,mean,bins[2]/2])		
+
 	# Convert the array to a pandas data frame for easy reading	
-	df_res = pd.DataFrame(data,columns=(variable,'res fwhm','p/m','sigma2','fwhm2','mean2','sigma3','fwhm3','mean3'))
-	print df_res
+	df_res = pd.DataFrame(data,columns=(x_var,'sigma','mean','p/m'))
 
 	# Create a plot
-	plt.figure(variable+' Resolution')
-	plt.scatter(df_res[variable], df_res['res fwhm'])
-	plt.scatter(df_res[variable], df_res['fwhm2'])
-	plt.scatter(df_res[variable], df_res['fwhm3'])
-	#plt.ylim(0,0.6)
-	plt.legend(['Method 1','Method 2','Method 3'])
-	plt.xlabel('Truth '+labels[particle][i]+units[particle][i])
-	plt.ylabel(labels[particle][i]+' Resolution Width')
+	plt.figure(y_var+' Resolution vs '+x_var)
+	plt.scatter(df_res[x_var], df_res['sigma'])
+	plt.xlabel('Truth '+labels[particle][ix]+units[particle][ix])
+	plt.ylabel(labels[particle][iy]+' Resolution Width')
 
 	# Save and close figure
-        plt.savefig('plots/'+name+'/'+particle+'/Resolution_vs_'+variable+'_'+name+'_'+particle,bbox_inches='tight')
-        print 'Saved Figure: Resolution_vs_'+variable+'_'+name+'_'+particle
+        plt.savefig('plots/'+name+'/'+particle+'/'+y_var+'_Resolution_vs_'+x_var+'_'+name+'_'+particle,bbox_inches='tight')
+        print 'Saved Figure: '+y_var+'_Resolution_vs_'+x_var+'_'+name+'_'+particle
        	plt.close()
 
 
@@ -384,8 +336,10 @@ def Run_Plotting(name):
 	# Create resolution plots
 	for p in par:
 		Plot_Res(df,cutA,cutB,cutC,name,p)
-		Plot_Res_vs_Var(cutB,name,p,'eta',1,[-2.4,2.4,0.1])
-		Plot_Res_vs_Var(cutB,name,p,'pt',0,[90,510,20])	
+		Plot_Res_vs_Var(cutB,name,p,'eta','eta',1,1,[-2.4,2.4,0.1])
+		Plot_Res_vs_Var(cutB,name,p,'pt','pt',0,0,[90,510,20])	
+		Plot_Res_vs_Var(cutB,name,p,'pt','eta',0,1,[-2.4,2.4,0.1])
+		Plot_Res_vs_Var(cutB,name,p,'eta','pt',1,0,[90,510,20])
 
 
 
