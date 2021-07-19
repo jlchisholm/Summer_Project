@@ -272,8 +272,8 @@ def Plot_Res(df,cutA,cutB,cutC,name,particle):
 
 
 # Creates and saves the resolution vs variable plots
-# Input: cutB of df, data type, particle, resolution (y) variable, (x) variable, index of y variable, index of x variable, and [first bin edge, last bin edge, width of bins]
-def Plot_Res_vs_Var(cutB,name,particle,y_var,x_var,iy,ix,bins):
+# Input: df, cutA, cutB, cutC, data type, particle, resolution (y) variable, (x) variable, index of y variable, index of x variable, and [first bin edge, last bin edge, width of bins]
+def Plot_Res_vs_Var(df,cutA,cutB,cutC,name,particle,y_var,x_var,iy,ix,bins):
 
 	data = []   # Array to hold var vs fwhm values
 	for bottom_edge in np.arange(bins[0],bins[1],bins[2]):	
@@ -283,23 +283,34 @@ def Plot_Res_vs_Var(cutB,name,particle,y_var,x_var,iy,ix,bins):
 		middle = bottom_edge+(bins[2]/2)
 
 		# Look at resolution at a particular value of var
-		cut_temp = cutB[cutB['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
+		cut_temp = df[df['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
 		cut_temp = cut_temp[cut_temp['truth '+particle+' '+x_var]<top_edge]
+		cut_tempA = cutA[cutA['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
+                cut_tempA = cut_tempA[cut_tempA['truth '+particle+' '+x_var]<top_edge]
+		cut_tempB = cutB[cutB['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
+                cut_tempB = cut_tempB[cut_tempB['truth '+particle+' '+x_var]<top_edge]
+		cut_tempC = cutC[cutC['truth '+particle+' '+x_var]>=bottom_edge]      # Should I fold in edges of first and last?
+                cut_tempC = cut_tempC[cut_tempC['truth '+particle+' '+x_var]<top_edge]
 
-		# Get standard deviation with dataframe methods
+		# Get standard deviations with dataframe method
                 sigma = cut_temp['resolution '+particle+' '+y_var].std()
-                mean = cut_temp['resolution '+particle+' '+y_var].mean()
+		sigmaA = cut_tempA['resolution '+particle+' '+y_var].std()
+		sigmaB = cut_tempB['resolution '+particle+' '+y_var].std()
+		sigmaC = cut_tempC['resolution '+particle+' '+y_var].std()
 
 		# Append the data from this particular var
-		#data.append([middle,sigma1,mean1,sigma2,mean2,bins[2]/2])
-		data.append([middle,sigma,mean,bins[2]/2])		
+		data.append([middle,bins[2]/2,sigma,sigmaA,sigmaB,sigmaC])		
 
 	# Convert the array to a pandas data frame for easy reading	
-	df_res = pd.DataFrame(data,columns=(x_var,'sigma','mean','p/m'))
+	df_res = pd.DataFrame(data,columns=(x_var,'p/m','sigma','sigmaA','sigmaB','sigmaC'))
 
-	# Create a plot
+	# Create a scatter plot
 	plt.figure(y_var+' Resolution vs '+x_var)
 	plt.scatter(df_res[x_var], df_res['sigma'])
+	plt.scatter(df_res[x_var], df_res['sigmaA'])
+	plt.scatter(df_res[x_var], df_res['sigmaB'])
+	plt.scatter(df_res[x_var], df_res['sigmaC'])
+	plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
 	plt.xlabel('Truth '+labels[particle][ix]+units[particle][ix])
 	plt.ylabel(labels[particle][iy]+' Resolution Width')
 
@@ -336,10 +347,10 @@ def Run_Plotting(name):
 	# Create resolution plots
 	for p in par:
 		Plot_Res(df,cutA,cutB,cutC,name,p)
-		Plot_Res_vs_Var(cutB,name,p,'eta','eta',1,1,[-2.4,2.4,0.1])
-		Plot_Res_vs_Var(cutB,name,p,'pt','pt',0,0,[90,510,20])	
-		Plot_Res_vs_Var(cutB,name,p,'pt','eta',0,1,[-2.4,2.4,0.1])
-		Plot_Res_vs_Var(cutB,name,p,'eta','pt',1,0,[90,510,20])
+		Plot_Res_vs_Var(df,cutA,cutB,cutC,name,p,'eta','eta',1,1,[-2.4,2.4,0.1])
+		Plot_Res_vs_Var(df,cutA,cutB,cutC,name,p,'pt','pt',0,0,[90,510,20])	
+		Plot_Res_vs_Var(df,cutA,cutB,cutC,name,p,'pt','eta',0,1,[-2.4,2.4,0.1])
+		Plot_Res_vs_Var(df,cutA,cutB,cutC,name,p,'eta','pt',1,0,[90,510,20])
 
 
 
