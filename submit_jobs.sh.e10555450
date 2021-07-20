@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "plotter.py", line 364, in <module>
-    Run_Plotting('parton_ejets')
-  File "plotter.py", line 333, in Run_Plotting
-    df = Create_DF(name)
-  File "plotter.py", line 141, in Create_DF
-    print 'Appended file '+name+'_'+n	
-NameError: global name 'n' is not defined
