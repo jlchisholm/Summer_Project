@@ -119,14 +119,14 @@ ticks_labels = {'thad' : [ticks_labels_pt_t, ticks_labels_eta, ticks_labels_y, t
 def Create_DF(name): 
 	
 	# Open first root file and its trees
-	file0 = uproot.open('/data/jchishol/mntuple_ttbar_0_'+name+'.root')
+	file0 = uproot.open('/data/jchishol/mc16e/mntuple_ttbar_0_'+name+'.root')
 	tree_truth0 = file0['parton'].arrays()
 	tree_reco0 = file0['reco'].arrays()
 
 	# Create pandas dataframe
 	df = ak.to_pandas(tree_reco0['isMatched'])                              # Add reco isMatched to df
 	df.rename(columns={'values':'reco isMatched'},inplace=True)             # Rename first column appropriately
-	#df['truth isMatched'] = ak.to_pandas(tree_truth0['isMatched'])          # Add truth isMatched (might not really need this one)
+	df['truth isDummy'] = ak.to_pandas(tree_truth0['isDummy'])              # Add truth isDummy to df 
 	df['likelihood'] = ak.to_pandas(tree_reco0['klfitter_logLikelihood'])   # Add logLikelihood of klfitter
 
 	# Add variables to be plotted
@@ -137,7 +137,9 @@ def Create_DF(name):
 		
 	# Close root file
 	file0.close()
-	
+
+	print 'Appended file '+name+'_0'	
+
 	# Return main data frame
 	return df
 
@@ -148,14 +150,15 @@ def Create_DF(name):
 def Append_Data(df,n,name):
 
         # Open root file and its trees
-        filen = uproot.open('/data/jchishol/mntuple_ttbar_'+n+'_'+name+'.root')
-        tree_truth_n = filen['parton'].arrays()
-        tree_reco_n = filen['reco'].arrays()
+        file_n = uproot.open('/data/jchishol/mc16e/mntuple_ttbar_'+n+'_'+name+'.root')
+        tree_truth_n = file_n['parton'].arrays()
+        tree_reco_n = file_n['reco'].arrays()
 
         # Create pandas data frame
         df_addon = ak.to_pandas(tree_reco_n['isMatched'])
         df_addon.rename(columns={'values':'reco isMatched'},inplace=True)
-        df_addon['likelihood'] = ak.to_pandas(tree_reco_n['klfitter_logLikelihood'])
+        df_addon['truth isDummy'] = ak.to_pandas(tree_truth_n['isDummy'])
+	df_addon['likelihood'] = ak.to_pandas(tree_reco_n['klfitter_logLikelihood'])
 
 	# Add variables to be plotted
         for p in par:                     # For each particle
@@ -167,7 +170,7 @@ def Append_Data(df,n,name):
         df = df.append(df_addon,ignore_index=True)
 
         # Close root file
-        filen.close()
+        file_n.close()
 
 	print 'Appended file '+name+'_'+n
 
@@ -180,8 +183,10 @@ def Append_Data(df,n,name):
 def Edit_Data(df):
 
 	# Cut rows that are not matched between truth and reco
-	indexNames = df[df['reco isMatched'] == 0 ].index
+	indexNames = df[df['reco isMatched'] == 0 ].index   # Want truth events that are detected in reco
 	df.drop(indexNames,inplace=True)
+	indexNames = df[df['truth isDummy'] == 1 ].index    # Want reco events that match to an actual truth event
+	df.drop(indexNames,inplace=True)  
 
 	# Need to drop rows with inf or NaN values (a fix for now)
 	df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -312,7 +317,7 @@ def Plot_Res_vs_Var(df,cutA,cutB,cutC,name,particle,y_var,x_var,iy,ix,bins):
 	plt.scatter(df_res[x_var], df_res['sigmaC'])
 	plt.legend(['No Cuts','logLikelihood > -52','logLikelihood > -50','logLikelihood > -48'])
 	plt.xlabel('Truth '+labels[particle][ix]+units[particle][ix])
-	plt.ylabel(labels[particle][iy]+' Resolution Width')
+	plt.ylabel(labels[particle][iy]+' Resolution')
 
 	# Save and close figure
         plt.savefig('plots/'+name+'/'+particle+'/'+y_var+'_Resolution_vs_'+x_var+'_'+name+'_'+particle,bbox_inches='tight')
